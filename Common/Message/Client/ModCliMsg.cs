@@ -1,4 +1,4 @@
-﻿using Lidgren.Network;
+﻿using LiteNetLib;
 using LunaCommon.Enums;
 using LunaCommon.Message.Client.Base;
 using LunaCommon.Message.Data;
@@ -11,9 +11,9 @@ namespace LunaCommon.Message.Client
         internal ModCliMsg() { }
 
         public override ClientMessageType MessageType => ClientMessageType.Mod;
-        protected override int DefaultChannel => SendReliably() ? 15 : 0;
-        public override NetDeliveryMethod NetDeliveryMethod => SendReliably() ?
-            NetDeliveryMethod.ReliableOrdered : NetDeliveryMethod.UnreliableSequenced;
+
+        public override SendOptions NetDeliveryMethod =>
+            SendReliably() ? SendOptions.ReliableOrdered : SendOptions.Sequenced;
 
         private bool SendReliably()
         {

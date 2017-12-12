@@ -1,9 +1,9 @@
-﻿using System;
-using Lidgren.Network;
+﻿using LiteNetLib;
 using LunaCommon.Enums;
 using LunaCommon.Message.Data.CraftLibrary;
 using LunaCommon.Message.Server.Base;
 using LunaCommon.Message.Types;
+using System;
 using System.Collections.Generic;
 
 namespace LunaCommon.Message.Server
@@ -25,7 +25,6 @@ namespace LunaCommon.Message.Server
         };
 
         public override ServerMessageType MessageType => ServerMessageType.CraftLibrary;
-        protected override int DefaultChannel => 9;
-        public override NetDeliveryMethod NetDeliveryMethod => NetDeliveryMethod.ReliableOrdered;
+        public override SendOptions NetDeliveryMethod => SendOptions.ReliableOrdered;
     }
 }

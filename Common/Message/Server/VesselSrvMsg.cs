@@ -1,4 +1,4 @@
-﻿using Lidgren.Network;
+﻿using LiteNetLib;
 using LunaCommon.Enums;
 using LunaCommon.Message.Data.Vessel;
 using LunaCommon.Message.Server.Base;
@@ -27,9 +27,8 @@ namespace LunaCommon.Message.Server
         };
 
         public override ServerMessageType MessageType => ServerMessageType.Vessel;
-        protected override int DefaultChannel => IsVesselProtoPositionOrFlightState() ? 0 : 8;
-        public override NetDeliveryMethod NetDeliveryMethod => IsVesselProtoPositionOrFlightState() ?
-            NetDeliveryMethod.UnreliableSequenced : NetDeliveryMethod.ReliableOrdered;
+        public override SendOptions NetDeliveryMethod => IsVesselProtoPositionOrFlightState() ?
+            SendOptions.Sequenced : SendOptions.ReliableOrdered;
 
         private bool IsVesselProtoPositionOrFlightState()
         {

@@ -1,9 +1,9 @@
-﻿using System;
-using Lidgren.Network;
+﻿using LiteNetLib;
 using LunaCommon.Enums;
 using LunaCommon.Message.Client.Base;
 using LunaCommon.Message.Data.Chat;
 using LunaCommon.Message.Types;
+using System;
 using System.Collections.Generic;
 
 namespace LunaCommon.Message.Client
@@ -25,9 +25,7 @@ namespace LunaCommon.Message.Client
         };
 
         public override ClientMessageType MessageType => ClientMessageType.Chat;
-
-        protected override int DefaultChannel => 3;
-
-        public override NetDeliveryMethod NetDeliveryMethod => NetDeliveryMethod.ReliableOrdered;
+        
+        public override SendOptions NetDeliveryMethod => SendOptions.ReliableOrdered;
     }
 }

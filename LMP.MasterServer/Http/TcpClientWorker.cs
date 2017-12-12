@@ -15,7 +15,7 @@ namespace LMP.MasterServer.Http
                 var clientEndpoint = ((IPEndPoint)client.Client.RemoteEndPoint).Address;
 
                 //We only allow requests from the same client every 10 seconds
-                if (!FloodControl.AllowRequest(clientEndpoint))
+                if (!FloodControl.AllowRequest(clientEndpoint.ToString()))
                 {
                     ConsoleLogger.Log(LogLevels.Debug, $"Ignoring GET request from {client.Client.RemoteEndPoint}");
                     client.Close();

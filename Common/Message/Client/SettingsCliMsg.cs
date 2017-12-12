@@ -1,4 +1,4 @@
-﻿using Lidgren.Network;
+﻿using LiteNetLib;
 using LunaCommon.Enums;
 using LunaCommon.Message.Client.Base;
 using LunaCommon.Message.Data.Settings;
@@ -20,7 +20,6 @@ namespace LunaCommon.Message.Client
         };
 
         public override ClientMessageType MessageType => ClientMessageType.Settings;
-        protected override int DefaultChannel => 2;
-        public override NetDeliveryMethod NetDeliveryMethod => NetDeliveryMethod.ReliableOrdered;
+        public override SendOptions NetDeliveryMethod => SendOptions.ReliableOrdered;
     }
 }

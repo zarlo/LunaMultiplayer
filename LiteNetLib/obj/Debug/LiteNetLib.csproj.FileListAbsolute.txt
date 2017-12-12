@@ -1,0 +1,6 @@
+C:\GitHub\LunaMultiPlayer\LiteNetLib\bin\Debug\LiteNetLib.dll
+C:\GitHub\LunaMultiPlayer\LiteNetLib\bin\Debug\LiteNetLib.pdb
+C:\GitHub\LunaMultiPlayer\LiteNetLib\obj\Debug\LiteNetLib.csproj.CoreCompileInputs.cache
+C:\GitHub\LunaMultiPlayer\LiteNetLib\obj\Debug\LiteNetLib.dll
+C:\GitHub\LunaMultiPlayer\LiteNetLib\obj\Debug\LiteNetLib.pdb
+C:\GitHub\LunaMultiPlayer\LiteNetLib\bin\Debug\UnityEngine.dll

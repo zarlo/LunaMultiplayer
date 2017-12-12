@@ -1,4 +1,5 @@
-﻿using Lidgren.Network;
+﻿using LiteNetLib;
+using LiteNetLib.Utils;
 using LmpGlobal;
 using LunaCommon;
 using LunaCommon.Message;
@@ -29,57 +30,45 @@ namespace LMP.MasterServer
         public static ConcurrentDictionary<long, Server> ServerDictionary { get; } = new ConcurrentDictionary<long, Server>();
         private static MasterServerMessageFactory MasterServerMessageFactory { get; } = new MasterServerMessageFactory();
 
+        private static NetManager Server { get; set; }
+
         public static async void Start()
         {
-            var config = new NetPeerConfiguration("masterserver")
+            var listener = new EventBasedNetListener();
+            listener.NetworkReceiveEvent += ListenerOnNetworkReceiveEvent;
+            var natPunchListener = new EventBasedNatPunchListener();
+            Server = new NetManager(listener, 500, "masterserver")
             {
-                AutoFlushSendQueue = false, //Set it to false so lidgren doesn't wait until msg.size = MTU for sending
-                Port = Port,
-                SuppressUnreliableUnorderedAcks = true,
+                UnconnectedMessagesEnabled = true,
+                DisconnectTimeout = ServerMsTimeout,
                 PingInterval = 500,
-                ConnectionTimeout = ServerMsTimeout
+                NatPunchEnabled = true,
             };
-
-            config.EnableMessageType(NetIncomingMessageType.UnconnectedData);
-            var peer = new NetPeer(config);
-            peer.Start();
-            
+            Server.Start();
+            Server.NatPunchModule.Init(natPunchListener);
             CheckMasterServerListed();
 
             ConsoleLogger.Log(LogLevels.Normal, $"Master server {LmpVersioning.CurrentVersion} started! Поехали!");
             RemoveExpiredServers();
 
+
             while (RunServer)
             {
-                NetIncomingMessage msg;
-                while ((msg = peer.ReadMessage()) != null)
-                {
-                    switch (msg.MessageType)
-                    {
-                        case NetIncomingMessageType.DebugMessage:
-                        case NetIncomingMessageType.VerboseDebugMessage:
-                            ConsoleLogger.Log(LogLevels.Debug, msg.ReadString());
-                            break;
-                        case NetIncomingMessageType.WarningMessage:
-                            ConsoleLogger.Log(LogLevels.Warning, msg.ReadString());
-                            break;
-                        case NetIncomingMessageType.ErrorMessage:
-                            ConsoleLogger.Log(LogLevels.Error, msg.ReadString());
-                            break;
-                        case NetIncomingMessageType.UnconnectedData:
-                            if (FloodControl.AllowRequest(msg.SenderEndPoint.Address))
-                            {
-                                var messageBytes = msg.ReadBytes(msg.LengthBytes);
-                                var message = GetMessage(messageBytes);
-                                if (message != null)
-                                    HandleMessage(message, msg, peer);
-                            }
-                            break;
-                    }
-                }
+                Server.PollEvents();
                 await Task.Delay(ServerMsTick);
             }
-            peer.Shutdown("Goodbye and thanks for all the fish!");
+
+            Server.Stop();
+        }
+        
+        private static void ListenerOnNetworkReceiveEvent(NetPeer peer, NetDataReader netDataReader)
+        {
+            if (FloodControl.AllowRequest(peer.EndPoint.Host))
+            {
+                var message = GetMessage(netDataReader.Data);
+                if (message != null)
+                    HandleMessage(message, peer);
+            }
         }
 
         private static IMasterServerMessageBase GetMessage(byte[] messageBytes)
@@ -144,28 +133,30 @@ namespace LMP.MasterServer
             return null;
         }
 
-        private static void HandleMessage(IMasterServerMessageBase message, NetIncomingMessage netMsg, NetPeer peer)
+        private static void HandleMessage(IMasterServerMessageBase message, NetPeer peer)
         {
             switch ((message?.Data as MsBaseMsgData)?.MasterServerMessageSubType)
             {
                 case MasterServerMessageSubType.RegisterServer:
-                    RegisterServer(message, netMsg);
+                    RegisterServer(message, peer.GetEndpoint());
                     break;
                 case MasterServerMessageSubType.RequestServers:
                     var version = ((MsRequestServersMsgData)message.Data).CurrentVersion;
-                    ConsoleLogger.Log(LogLevels.Normal, $"LIST REQUEST from: {netMsg.SenderEndPoint} v: {version}");
-                    SendServerLists(netMsg, peer);
+                    ConsoleLogger.Log(LogLevels.Normal, $"LIST REQUEST from: {peer.GetEndpoint()} v: {version}");
+                    SendServerLists(peer);
                     break;
                 case MasterServerMessageSubType.Introduction:
                     var msgData = (MsIntroductionMsgData)message.Data;
                     if (ServerDictionary.TryGetValue(msgData.Id, out var server))
                     {
-                        ConsoleLogger.Log(LogLevels.Normal, $"INTRODUCTION request from: {netMsg.SenderEndPoint} to server: {server.ExternalEndpoint}");
-                        peer.Introduce(
-                            server.InternalEndpoint,
-                            server.ExternalEndpoint,
-                            Common.CreateEndpointFromString(msgData.InternalEndpoint),// client internal
-                            netMsg.SenderEndPoint,// client external
+                        var clientInternalEndpoint = Common.CreateEndpointFromString(msgData.InternalEndpoint);
+
+                        ConsoleLogger.Log(LogLevels.Normal, $"INTRODUCTION request from: {peer.GetEndpoint()} to server: {server.ExternalEndpoint}");
+                        Server.NatPunchModule.NatIntroduce(
+                            new NetEndPoint(server.InternalEndpoint.Address.ToString(), server.InternalEndpoint.Port),
+                            new NetEndPoint(server.ExternalEndpoint.Address.ToString(), server.ExternalEndpoint.Port),
+                            new NetEndPoint(clientInternalEndpoint.Address.ToString(), clientInternalEndpoint.Port),
+                            peer.EndPoint,// client external
                             msgData.Token); // request token
                     }
                     else
@@ -179,7 +170,7 @@ namespace LMP.MasterServer
         /// <summary>
         /// Return the list of servers that match the version specified
         /// </summary>
-        private static void SendServerLists(NetIncomingMessage netMsg, NetPeer peer)
+        private static void SendServerLists(NetPeer peer)
         {
             var values = ServerDictionary.Values.OrderBy(v => v.Info.Id).ToArray();
 
@@ -206,25 +197,22 @@ namespace LMP.MasterServer
             var msg = MasterServerMessageFactory.CreateNew<MainMstSrvMsg>(msgData);
             var data = msg.Serialize(true);
 
-            var outMsg = peer.CreateMessage(data.Length);
-            outMsg.Write(data);
-            peer.SendUnconnectedMessage(outMsg, netMsg.SenderEndPoint);
-            peer.FlushSendQueue();
+            peer.Send(data, SendOptions.ReliableOrdered);
         }
 
-        private static void RegisterServer(IMessageBase message, NetIncomingMessage netMsg)
+        private static void RegisterServer(IMessageBase message, IPEndPoint endpoint)
         {
             var msgData = (MsRegisterServerMsgData)message.Data;
 
             if (!ServerDictionary.ContainsKey(msgData.Id))
             {
-                ServerDictionary.TryAdd(msgData.Id, new Server(msgData, netMsg.SenderEndPoint));
-                ConsoleLogger.Log(LogLevels.Normal, $"NEW SERVER: {netMsg.SenderEndPoint}");
+                ServerDictionary.TryAdd(msgData.Id, new Server(msgData, endpoint));
+                ConsoleLogger.Log(LogLevels.Normal, $"NEW SERVER: {endpoint}");
             }
             else
             {
                 //Just update
-                ServerDictionary[msgData.Id] = new Server(msgData, netMsg.SenderEndPoint);
+                ServerDictionary[msgData.Id] = new Server(msgData, endpoint);
             }
         }
 

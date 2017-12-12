@@ -1,9 +1,9 @@
-﻿using System;
-using Lidgren.Network;
+﻿using LiteNetLib;
 using LunaCommon.Enums;
 using LunaCommon.Message.Data.Admin;
 using LunaCommon.Message.Server.Base;
 using LunaCommon.Message.Types;
+using System;
 using System.Collections.Generic;
 
 namespace LunaCommon.Message.Server
@@ -22,8 +22,7 @@ namespace LunaCommon.Message.Server
         };
 
         public override ServerMessageType MessageType => ServerMessageType.Admin;
-        protected override int DefaultChannel => 16;
-        //Must arrive but only the latest is important
-        public override NetDeliveryMethod NetDeliveryMethod => NetDeliveryMethod.ReliableOrdered;
+
+        public override SendOptions NetDeliveryMethod => SendOptions.ReliableOrdered;
     }
 }
